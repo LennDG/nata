@@ -3,7 +3,9 @@
 	that have a position and a radius.
 ]]
 
-local physical = {}
+local physical = {
+	filter = {'x', 'y', 'r'}
+}
 
 local function isColliding(a, b)
 	return (a.x - b.x) ^ 2 + (a.y - b.y) ^ 2 < (a.r + b.r) ^ 2

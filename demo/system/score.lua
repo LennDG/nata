@@ -3,7 +3,9 @@
 	entity that has a point value dies.
 ]]
 
-local score = {}
+local score = {
+	filter = {'score'}
+}
 
 function score:init()
 	self.score = 0

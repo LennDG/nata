@@ -3,7 +3,9 @@
 	entity runs out of health, it's marked for removal.
 ]]
 
-local health = {}
+local health = {
+	filter = {'x', 'y', 'r', 'health', 'damage'}
+}
 
 function health:collide(e, other)
 	--[[

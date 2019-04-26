@@ -74,6 +74,7 @@ function Pool:_init(options, ...)
 		local system = setmetatable({
 			pool = self,
 		}, {__index = systemDefinition})
+		
 		table.insert(self._systems, system)
 	end
 	self:emit('init', ...)

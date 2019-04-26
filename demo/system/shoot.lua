@@ -3,8 +3,9 @@
 	entities can specify a bullet entity to spawn and a cooldown time.
 ]]
 
-local shoot = {}
-
+local shoot = {
+	filter = {'x', 'y', 'shoot'}
+}
 function shoot:add(e)
 	-- initialize entities that can shoot with a reload timer
 	if not self.pool.groups.shoot.hasEntity[e] then return false end
