@@ -9,7 +9,6 @@ local Enemy2 = require 'entity.enemy2'
 local spawn = {}
 
 function spawn:init()
-	print('init Spawn')
 	self.enemy1SpawnTime = 1
 	self.enemy1SpawnTimer = self.enemy1SpawnTime
 	self.enemy2SpawnTime = 5

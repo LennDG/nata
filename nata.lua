@@ -76,7 +76,7 @@ function Pool:_init(options, ...)
 	-- Pool system options handling
 	local systems = options.systems or {nata.oop()}
 	for _, systemDefinition in ipairs(systems) do
-		table.insert(self.systems, self:newSystem(systemDefinition, ...))
+		table.insert(self.systems, self:newSystem(systemDefinition))
 	end
 
 	-- Emit init event to all systems
@@ -105,6 +105,7 @@ function Pool:queue(entity)
 	return entity
 end
 
+-- add/update entities in queue to groups, systems and pool 
 function Pool:flush()
 	for i = 1, #self._queue do
 		local entity = self._queue[i]
@@ -120,13 +121,6 @@ function Pool:flush()
 			end
 		end
 
-		-- add the entity to the pool if it hasn't been added already
-		if not self.hasEntity[entity] then
-			table.insert(self.entities, entity)
-			self.hasEntity[entity] = true
-			self:emit('add', entity)
-		end
-
 		-- add/remove the entity to any system as needed
 		for _, system in ipairs(self.systems) do
 			local belongsInSystem = filterEntity(entity, system.filter)
@@ -135,6 +129,13 @@ function Pool:flush()
 			elseif not belongsInSystem and system.hasEntity[entity] then
 				system:_removeEntity(entity)
 			end
+		end
+
+		-- add the entity to the pool if it hasn't been added already
+		if not self.hasEntity[entity] then
+			table.insert(self.entities, entity)
+			self.hasEntity[entity] = true
+			self:emit('add', entity)
 		end
 
 		self._queue[i] = nil
@@ -146,7 +147,6 @@ function Pool:remove(f)
 	for i = #self.entities, 1, -1 do
 		local entity = self.entities[i]
 		if f(entity) then
-			self:emit('remove', entity)
 			
 			-- Remove from groups
 			for groupName, group in pairs(self.groups) do
@@ -163,6 +163,7 @@ function Pool:remove(f)
 			end
 
 			-- Remove from pool
+			self:emit('remove', entity)
 			table.remove(self.entities, i)
 			self.hasEntity[entity] = nil
 		end
@@ -286,13 +287,13 @@ end
 -- public functions - accessible within the system definition's functions --
 function System:queue(...) self.pool:queue(...) end
 
-function Pool:newSystem(definition, ...)
-	print(definition)
+-- Add a new system to the pool
+function Pool:newSystem(definition)
 	local system = setmetatable({
 		entities = {}, -- also accessible from within system definition's functions
 		hasEntity = {}, -- also accessible from within system definition's functions
 		pool = self,
-		_definition = definition,
+		_definition = definition
 	}, System)
 	return system
 end
