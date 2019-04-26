@@ -53,15 +53,17 @@ local Pool = {}
 Pool.__index = Pool
 
 function Pool:_init(options, ...)
+	-- Pool fields
 	self._queue = {}
 	self.entities = {}
 	self.hasEntity = {}
 	self.groups = {}
-	self._systems = {}
+	self.systems = {}
 	self._events = {}
+
+	-- Pool group options handling
 	options = options or {}
 	local groups = options.groups or {}
-	local systems = options.systems or {nata.oop()}
 	for groupName, groupOptions in pairs(groups) do
 		self.groups[groupName] = {
 			filter = groupOptions.filter,
@@ -70,13 +72,14 @@ function Pool:_init(options, ...)
 			hasEntity = {},
 		}
 	end
+
+	-- Pool system options handling
+	local systems = options.systems or {nata.oop()}
 	for _, systemDefinition in ipairs(systems) do
-		local system = setmetatable({
-			pool = self,
-		}, {__index = systemDefinition})
-		
-		table.insert(self._systems, system)
+		table.insert(self.systems, self:newSystem(systemDefinition, ...))
 	end
+
+	-- Emit init event to all systems
 	self:emit('init', ...)
 end
 
@@ -105,6 +108,7 @@ end
 function Pool:flush()
 	for i = 1, #self._queue do
 		local entity = self._queue[i]
+
 		-- check if the entity belongs in each group and
 		-- add it to/remove it from the group as needed
 		for groupName, group in pairs(self.groups) do
@@ -115,26 +119,50 @@ function Pool:flush()
 				self:_removeFromGroup(groupName, entity)
 			end
 		end
+
 		-- add the entity to the pool if it hasn't been added already
 		if not self.hasEntity[entity] then
 			table.insert(self.entities, entity)
 			self.hasEntity[entity] = true
 			self:emit('add', entity)
 		end
+
+		-- add/remove the entity to any system as needed
+		for _, system in ipairs(self.systems) do
+			local belongsInSystem = filterEntity(entity, system.filter)
+			if belongsInSystem and not system.hasEntity[entity] then
+				system:_addEntity(entity)
+			elseif not belongsInSystem and system.hasEntity[entity] then
+				system:_removeEntity(entity)
+			end
+		end
+
 		self._queue[i] = nil
 	end
 end
 
+-- Remove an entity from groups, systems and pool
 function Pool:remove(f)
 	for i = #self.entities, 1, -1 do
 		local entity = self.entities[i]
 		if f(entity) then
 			self:emit('remove', entity)
+			
+			-- Remove from groups
 			for groupName, group in pairs(self.groups) do
 				if group.hasEntity[entity] then
 					self:_removeFromGroup(groupName, entity)
 				end
 			end
+
+			-- Remove from systems
+			for _, system in ipairs(self.systems) do
+				if system.hasEntity[entity] then
+					system:_removeEntity(entity)
+				end
+			end
+
+			-- Remove from pool
 			table.remove(self.entities, i)
 			self.hasEntity[entity] = nil
 		end
@@ -154,7 +182,7 @@ function Pool:off(event, f)
 end
 
 function Pool:emit(event, ...)
-	for _, system in ipairs(self._systems) do
+	for _, system in ipairs(self.systems) do
 		if type(system[event]) == 'function' then
 			system[event](system, ...)
 		end
@@ -167,7 +195,7 @@ function Pool:emit(event, ...)
 end
 
 function Pool:getSystem(systemDefinition)
-	for _, system in ipairs(self._systems) do
+	for _, system in ipairs(self.systems) do
 		if getmetatable(system).__index == systemDefinition then
 			return system
 		end
@@ -194,6 +222,79 @@ function nata.new(...)
 	local pool = setmetatable({}, Pool)
 	pool:_init(...)
 	return pool
+end
+
+--[[
+	System definitions:
+
+	Passed to nata.new to define the systems you can use. They're a table with the following keys:
+	- filter - function|table|nil - defines what entities the system acts on
+		- if it's a function and function(entity) returns true, the system will act on that entity
+		- if it's a table and each item of the table is a key in the entity, the system will act on that entity
+		- if it's nil, the system will act on every entity
+	- sort (optional) - if defined, systems will sort their entities when new ones are added.
+		- sort functions work the same way as with table.sort
+	- continuousSort - if true, systems will also sort entities on pool calls
+	- init (optional) - a self function that will run when the pool is created
+	- added (optional) - a self function that will run when an entity is added
+	- removed (optional) - a self function that will run when an entity is removed
+	- ... - other functions will be called when pool:emit(...) is called
+]]
+
+-- A system instance that does processing on entities within a pool.
+local System = {}
+function System:__index(k)
+	return System[k] or self._definition[k]
+end
+
+-- internal functions --
+
+-- adds an entity to the system's pool and sorts the entities if needed
+function System:_addEntity(entity, ...)
+	table.insert(self.entities, entity)
+	self.hasEntity[entity] = true
+
+	-- If the system has an add function, call it with the entity
+	if type(self._definition.added) == 'function' then
+		self._definition.added(self, entity, ...)
+	end
+
+	if self._definition.sort then
+		table.sort(self.entities, self._definition.sort)
+	end
+end
+
+-- removes an entity from the system's pool
+function System:_removeEntity(entity, ...)
+	if not self.hasEntity[entity] then return false end
+
+	-- I the system has a remove function, call it with the entity
+	if type(self._definition.removed) == 'function' then
+		self._definition.removed(self, entity, ...)
+	end
+
+	for i = #self.entities, 1, -1 do
+		if self.entities[i] == entity then
+			table.remove(self.entities, i)
+			break
+		end
+	end
+
+	self.hasEntity[entity] = false
+end
+
+-- public functions - accessible within the system definition's functions --
+function System:queue(...) self.pool:queue(...) end
+
+function Pool:newSystem(definition, ...)
+	print(definition)
+	local system = setmetatable({
+		entities = {}, -- also accessible from within system definition's functions
+		hasEntity = {}, -- also accessible from within system definition's functions
+		pool = self,
+		_definition = definition,
+	}, System)
+	return system
 end
 
 return nata

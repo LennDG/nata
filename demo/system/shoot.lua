@@ -6,14 +6,17 @@
 local shoot = {
 	filter = {'x', 'y', 'shoot'}
 }
-function shoot:add(e)
+function shoot:added(e)
 	-- initialize entities that can shoot with a reload timer
-	if not self.pool.groups.shoot.hasEntity[e] then return false end
 	e.shoot.reloadTimer = 0
 end
 
+function shoot:removed( e )
+	print('removed shooter')
+end
+
 function shoot:update(dt)
-	for _, e in ipairs(self.pool.groups.shoot.entities) do
+	for _, e in ipairs(self.entities) do
 		if e.shoot.reloadTimer > 0 then
 			e.shoot.reloadTimer = e.shoot.reloadTimer - dt
 		end
